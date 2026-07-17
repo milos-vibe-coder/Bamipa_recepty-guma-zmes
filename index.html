@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Kalkulácia materiálových nákladov gumárenských zmesí — BAMIPA">
+<title>BAMIPA — Recepty gumových zmesí</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+    background: #e9ecef;
+    padding: 16px 8px 48px;
+    color: #22303f;
+  }
+  .sheet {
+    max-width: 940px;
+    margin: 0 auto;
+    background: #fdfdfc;
+    border: 1px solid #d8dde3;
+    border-radius: 10px;
+    box-shadow: 0 2px 16px rgba(20,30,50,.12);
+    overflow: hidden;
+  }
+  header {
+    padding: 18px 18px 12px;
+    border-bottom: 3px solid #1f4e78;
+  }
+  .header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: .14em;
+    font-weight: 700;
+    color: #1f4e78;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  #title {
+    border: none;
+    border-bottom: 1px dashed transparent;
+    background: transparent;
+    font: 600 17px/1.3 inherit;
+    font-family: inherit;
+    color: #22303f;
+    width: min(460px, 88vw);
+    padding: 2px 0;
+    outline: none;
+  }
+  #title:focus { border-bottom-color: #b9c4d1; }
+  .recipe-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  .recipe-bar label { font-size: 12px; color: #5a6675; font-weight: 600; }
+  #recipe-select {
+    font: 14px inherit;
+    font-family: inherit;
+    padding: 6px 8px;
+    border: 1px solid #c4ccd6;
+    border-radius: 6px;
+    background: #fff;
+    color: #22303f;
+    max-width: min(320px, 70vw);
+  }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn {
+    border: 1px solid #c4ccd6;
+    background: transparent;
+    color: #5a6675;
+    border-radius: 6px;
+    padding: 7px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .btn:hover { background: #f2f5f8; }
+  .btn-save { border: 1px solid #1f4e78; color: #1f4e78; font-weight: 600; }
+  .btn-save.dirty { background: #1f4e78; color: #fff; }
+  .btn-save.saved-flash { background: #1e7d46; border-color: #1e7d46; color: #fff; }
+  .btn-danger { border-color: #e5c9c5; color: #c0392b; }
+  .btn-danger:hover { background: #fdf3f2; }
+  .btn-primary {
+    border: none;
+    background: #1f4e78;
+    color: #fff;
+    font-weight: 600;
+    padding: 9px 16px;
+    font-size: 14px;
+  }
+  .btn-primary:hover { background: #163a5c; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th {
+    background: #f2f5f8;
+    color: #3d4a5a;
+    font-weight: 700;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    padding: 10px;
+    text-align: right;
+    border-bottom: 1px solid #d8dde3;
+    white-space: nowrap;
+  }
+  th:first-child { text-align: left; }
+  td {
+    border-bottom: 1px solid #edf0f3;
+    padding: 3px 6px;
+    text-align: right;
+    white-space: nowrap;
+  }
+  td.name { text-align: left; min-width: 180px; }
+  td input {
+    width: 100%;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 7px 6px;
+    font: 14px inherit;
+    font-family: inherit;
+    color: #22303f;
+    background: transparent;
+    outline: none;
+  }
+  td input:focus { border-color: #7fa6cc; background: #fff; }
+  td input.num {
+    text-align: right;
+    color: #0b4dbb;
+    font-variant-numeric: tabular-nums;
+    min-width: 84px;
+    max-width: 120px;
+  }
+  td input.price-empty { background: #fff8e1; border-color: #f0e2ad; }
+  td.calc { color: #3d4a5a; font-variant-numeric: tabular-nums; padding: 3px 10px; }
+  td.total-cell { font-weight: 600; }
+  .del {
+    border: 1px solid #e5c9c5;
+    background: #fdf3f2;
+    color: #c0392b;
+    font-size: 14px;
+    border-radius: 5px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 6px 8px;
+  }
+  .del:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
+  tfoot td {
+    padding: 12px 10px;
+    font-weight: 700;
+    border-top: 2px solid #1f4e78;
+    background: #f2f5f8;
+    font-variant-numeric: tabular-nums;
+  }
+  tfoot td:first-child { text-align: left; }
+  .tf-note { font-weight: 400; color: #7a8699; font-size: 12px; }
+  .avg { color: #7a8699; font-weight: 400; }
+  .grand { font-size: 15px; }
+  footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 12px 18px;
+  }
+  .save-note { font-size: 12px; color: #8a95a3; }
+  @media (max-width: 560px) {
+    body { padding: 8px 4px 40px; }
+    th, td { padding-left: 4px; padding-right: 4px; }
+    td input.num { min-width: 68px; }
+  }
+  @media print {
+    body { background: #fff; padding: 0; }
+    .sheet { box-shadow: none; border: none; }
+    .actions, .recipe-bar, footer, .del, th:last-child, td:last-child { display: none; }
+    td input { border: none !important; background: transparent !important; }
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <header>
+    <div class="header-top">
+      <div>
+        <div class="eyebrow">BAMIPA · Spotrebovaný materiál</div>
+        <input id="title" value="" placeholder="Názov receptúry" aria-label="Názov receptúry">
+      </div>
+      <div class="actions">
+        <button class="btn btn-save" onclick="saveNow()">💾 Uložiť</button>
+        <button class="btn" onclick="saveToFile()">Uložiť do súboru</button>
+        <button class="btn" onclick="document.getElementById('file-input').click()">Načítať súbor</button>
+        <button class="btn" onclick="exportCSV()">Export CSV</button>
+        <button class="btn" onclick="window.print()">Tlač / PDF</button>
+        <input type="file" id="file-input" accept=".json,application/json" style="display:none" onchange="loadFromFile(this)">
+      </div>
+    </div>
+    <div class="recipe-bar">
+      <label for="recipe-select">Recept:</label>
+      <select id="recipe-select" onchange="switchRecipe(this.value)"></select>
+      <button class="btn" onclick="newRecipe()">+ Nový</button>
+      <button class="btn" onclick="duplicateRecipe()">Duplikovať</button>
+      <button class="btn btn-danger" onclick="deleteRecipe()">Vymazať recept</button>
+    </div>
+  </header>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Materiál</th>
+          <th>Množstvo (g)</th>
+          <th>kg</th>
+          <th>Cena €/kg</th>
+          <th>Spolu €</th>
+          <th style="width:60px; text-align:center">Odstrániť</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+      <tfoot>
+        <tr>
+          <td id="tf-label">SPOLU</td>
+          <td id="tf-grams">—</td>
+          <td id="tf-kg">—</td>
+          <td class="avg" id="tf-avg">—</td>
+          <td class="grand" id="tf-cost">—</td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <footer>
+    <button class="btn btn-primary" onclick="addRow()">+ Pridať materiál</button>
+    <span class="save-note" id="save-note">Zmeny sa ukladajú automaticky v tomto prehliadači</span>
+  </footer>
+</div>
+
+<script>
+"use strict";
+
+/* == Východiskový recept z dokladu 3307 / 0300044451 (08.07.2026) == */
+const INITIAL_ROWS = [
+  ["SKI 3S", "27100", ""],
+  ["Sabic BR 4610", "27100", ""],
+  ["Beč Žltý 10%-ný", "40.8", ""],
+  ["Beč Rubín 4BP 10%-ný", "5.1", ""],
+  ["Beč Sadzi N 772 12,5%-ný", "0.6", ""],
+  ["Titanova beloba AV 01", "4", ""],
+  ["Silanogran 6337", "1070", ""],
+  ["Mediaplast WH/P", "1400", ""],
+  ["Zinkoxid transparent", "1040", ""],
+  ["Stearin Palmera", "530", ""],
+  ["Antilux 654", "500", ""],
+  ["Antonox FI/65", "640", ""],
+  ["PEG 4000 - RADKA", "880", ""],
+  ["Silica ZJ 355 GR", "21819", "1,30"],
+  ["TMTD Dimacit", "100", ""],
+  ["MBT OCP - RADKA", "200", ""],
+  ["MBTS Verax", "430", ""],
+  ["Vulkalent E/C", "140", ""],
+  ["Síra Ground Sulphur", "800", ""]
+];
+const KEY = "bamipa-recepty-v1";
+const LEGACY_KEY = "spotrebovany-material-v1";
+
+let store = { recipes: [], activeId: null };
+
+const uid = () => "r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const active = () => store.recipes.find(r => r.id === store.activeId) || store.recipes[0];
+
+function num(v) {
+  if (v === "" || v == null) return NaN;
+  const n = parseFloat(String(v).replace(",", "."));
+  return isNaN(n) ? NaN : n;
+}
+function fmt(n, dec = 2) {
+  return isNaN(n) ? "—" : n.toLocaleString("sk-SK", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+
+/* ================= Ukladanie ================= */
+let saveTimer;
+function markDirty() {
+  const b = document.querySelector(".btn-save");
+  if (b) { b.classList.add("dirty"); b.classList.remove("saved-flash"); b.textContent = "💾 Uložiť *"; }
+}
+function markSaved(flash) {
+  const b = document.querySelector(".btn-save");
+  if (!b) return;
+  b.classList.remove("dirty");
+  b.textContent = "💾 Uložené";
+  if (flash) {
+    b.classList.add("saved-flash");
+    setTimeout(() => { b.classList.remove("saved-flash"); b.textContent = "💾 Uložiť"; }, 1500);
+  } else {
+    setTimeout(() => { b.textContent = "💾 Uložiť"; }, 1500);
+  }
+}
+function doSave() {
+  try {
+    const a = active();
+    if (a) a.updatedAt = new Date().toISOString();
+    localStorage.setItem(KEY, JSON.stringify(store));
+    document.getElementById("save-note").textContent =
+      "Uložené automaticky " + new Date().toLocaleTimeString("sk-SK");
+    return true;
+  } catch (e) { return false; }
+}
+function save() {
+  markDirty();
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { if (doSave()) markSaved(false); }, 400);
+}
+function saveNow() {
+  clearTimeout(saveTimer);
+  if (doSave()) {
+    markSaved(true);
+    document.getElementById("save-note").textContent = "Uložené " + new Date().toLocaleTimeString("sk-SK");
+  } else {
+    alert("Uloženie zlyhalo — prehliadač blokuje lokálne úložisko.");
+  }
+}
+
+/* ================= Recepty ================= */
+function makeRecipe(title, rows) {
+  return { id: uid(), title, rows: rows.map(r => [...r]), updatedAt: new Date().toISOString() };
+}
+
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) {
+      const data = JSON.parse(raw);
+      if (Array.isArray(data.recipes) && data.recipes.length) {
+        store = data;
+        if (!active()) store.activeId = store.recipes[0].id;
+        return;
+      }
+    }
+  } catch (e) {}
+  /* migrácia zo staršej jedno-receptovej verzie */
+  try {
+    const legacy = localStorage.getItem(LEGACY_KEY);
+    if (legacy) {
+      const d = JSON.parse(legacy);
+      if (Array.isArray(d.rows) && d.rows.length) {
+        const r = makeRecipe(d.title || "Recept na zmes — 3307 / 0300044451", d.rows);
+        store = { recipes: [r], activeId: r.id };
+        return;
+      }
+    }
+  } catch (e) {}
+  const r = makeRecipe("Recept na zmes — 3307 / 0300044451", INITIAL_ROWS);
+  store = { recipes: [r], activeId: r.id };
+}
+
+function renderRecipeSelect() {
+  const sel = document.getElementById("recipe-select");
+  sel.innerHTML = "";
+  store.recipes.forEach(r => {
+    const opt = document.createElement("option");
+    opt.value = r.id;
+    opt.textContent = r.title || "(bez názvu)";
+    if (r.id === store.activeId) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function switchRecipe(id) {
+  clearTimeout(saveTimer);
+  doSave();
+  store.activeId = id;
+  renderAll();
+  doSave();
+}
+
+function newRecipe() {
+  const name = prompt("Názov nového receptu:", "Nový recept " + new Date().toLocaleDateString("sk-SK"));
+  if (name === null) return;
+  const r = makeRecipe(name || "Nový recept", [["", "", ""]]);
+  store.recipes.push(r);
+  store.activeId = r.id;
+  renderAll();
+  doSave();
+}
+
+function duplicateRecipe() {
+  const a = active();
+  if (!a) return;
+  const r = makeRecipe(a.title + " (kópia)", a.rows);
+  store.recipes.push(r);
+  store.activeId = r.id;
+  renderAll();
+  doSave();
+}
+
+function deleteRecipe() {
+  const a = active();
+  if (!a) return;
+  if (store.recipes.length === 1) {
+    alert("Toto je posledný recept — nedá sa vymazať. Vytvorte najprv nový.");
+    return;
+  }
+  if (!confirm('Vymazať recept „' + (a.title || "bez názvu") + '" vrátane všetkých údajov?')) return;
+  store.recipes = store.recipes.filter(r => r.id !== a.id);
+  store.activeId = store.recipes[0].id;
+  renderAll();
+  doSave();
+}
+
+/* ================= Tabuľka ================= */
+function render() {
+  const a = active();
+  const tbody = document.getElementById("tbody");
+  tbody.innerHTML = "";
+  a.rows.forEach((r, i) => {
+    const tr = document.createElement("tr");
+
+    const tdName = document.createElement("td");
+    tdName.className = "name";
+    const inName = document.createElement("input");
+    inName.value = r[0];
+    inName.placeholder = "Názov materiálu";
+    inName.oninput = () => { r[0] = inName.value; save(); };
+    tdName.appendChild(inName);
+
+    const tdG = document.createElement("td");
+    const inG = document.createElement("input");
+    inG.className = "num";
+    inG.inputMode = "decimal";
+    inG.value = r[1];
+    inG.placeholder = "0";
+    inG.oninput = () => { r[1] = inG.value; recalcRow(); save(); };
+    tdG.appendChild(inG);
+
+    const tdKg = document.createElement("td");
+    tdKg.className = "calc";
+
+    const tdP = document.createElement("td");
+    const inP = document.createElement("input");
+    inP.className = "num";
+    inP.inputMode = "decimal";
+    inP.value = r[2];
+    inP.placeholder = "doplniť";
+    inP.oninput = () => { r[2] = inP.value; recalcRow(); save(); };
+    tdP.appendChild(inP);
+
+    const tdT = document.createElement("td");
+    tdT.className = "calc total-cell";
+
+    const tdX = document.createElement("td");
+    tdX.style.textAlign = "center";
+    const del = document.createElement("button");
+    del.className = "del";
+    del.textContent = "🗑";
+    del.title = "Odstrániť materiál";
+    del.onclick = () => {
+      const label = r[0] ? '„' + r[0] + '"' : "tento riadok";
+      if (confirm("Odstrániť materiál " + label + "?")) {
+        a.rows.splice(i, 1);
+        render();
+        save();
+      }
+    };
+    tdX.appendChild(del);
+
+    function recalcRow() {
+      const g = num(r[1]), p = num(r[2]);
+      const kg = g / 1000;
+      tdKg.textContent = fmt(kg, 3);
+      tdT.textContent = (!isNaN(g) && !isNaN(p)) ? fmt(kg * p) : "—";
+      inP.classList.toggle("price-empty", r[2] === "");
+      recalcTotals();
+    }
+
+    tr.append(tdName, tdG, tdKg, tdP, tdT, tdX);
+    tbody.appendChild(tr);
+    recalcRow();
+  });
+  recalcTotals();
+}
+
+function recalcTotals() {
+  const a = active();
+  let grams = 0, cost = 0, priced = 0;
+  a.rows.forEach(r => {
+    const g = num(r[1]), p = num(r[2]);
+    if (!isNaN(g)) grams += g;
+    if (!isNaN(g) && !isNaN(p)) { cost += (g / 1000) * p; priced++; }
+  });
+  const kg = grams / 1000;
+  document.getElementById("tf-grams").textContent = fmt(grams);
+  document.getElementById("tf-kg").textContent = fmt(kg, 3);
+  document.getElementById("tf-cost").textContent = fmt(cost) + " €";
+  document.getElementById("tf-avg").textContent = kg > 0 ? "Ø " + fmt(cost / kg) + " €/kg" : "—";
+  document.getElementById("tf-label").innerHTML =
+    "SPOLU " + (priced < a.rows.length ? '<span class="tf-note">(ocenené ' + priced + "/" + a.rows.length + ")</span>" : "");
+}
+
+function renderAll() {
+  const a = active();
+  document.getElementById("title").value = a.title;
+  renderRecipeSelect();
+  render();
+}
+
+function addRow() {
+  active().rows.push(["", "", ""]);
+  render();
+  save();
+  const inputs = document.querySelectorAll("#tbody tr:last-child input");
+  if (inputs[0]) inputs[0].focus();
+}
+
+/* ================= Súbory ================= */
+function saveToFile() {
+  clearTimeout(saveTimer);
+  doSave();
+  const a = active();
+  const data = { app: "bamipa-recepty", version: 1, title: a.title, rows: a.rows, savedAt: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const el = document.createElement("a");
+  const d = new Date();
+  const stamp = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  const safe = (a.title || "recept").replace(/[^\w\u00C0-\u017F -]/g, "").replace(/\s+/g, "_").slice(0, 40);
+  el.href = URL.createObjectURL(blob);
+  el.download = safe + "_" + stamp + ".json";
+  el.click();
+  URL.revokeObjectURL(el.href);
+  markSaved(true);
+}
+
+function loadFromFile(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!Array.isArray(data.rows)) throw new Error("bad format");
+      const r = makeRecipe(data.title || file.name.replace(/\.json$/i, ""),
+        data.rows.map(x => [String(x[0] ?? ""), String(x[1] ?? ""), String(x[2] ?? "")]));
+      store.recipes.push(r);
+      store.activeId = r.id;
+      renderAll();
+      doSave();
+      markSaved(true);
+      document.getElementById("save-note").textContent = "Načítané zo súboru: " + file.name;
+    } catch (e) {
+      alert("Súbor sa nepodarilo načítať — nie je to uložený recept z tejto aplikácie.");
+    }
+    input.value = "";
+  };
+  reader.readAsText(file);
+}
+
+function exportCSV() {
+  const a = active();
+  const lines = [["Materiál", "Množstvo (g)", "Množstvo (kg)", "Cena €/kg", "Spolu €"]];
+  a.rows.forEach(r => {
+    const g = num(r[1]), p = num(r[2]);
+    lines.push([
+      r[0],
+      isNaN(g) ? "" : String(g).replace(".", ","),
+      isNaN(g) ? "" : (g / 1000).toFixed(3).replace(".", ","),
+      isNaN(p) ? "" : String(p).replace(".", ","),
+      (!isNaN(g) && !isNaN(p)) ? ((g / 1000) * p).toFixed(2).replace(".", ",") : ""
+    ]);
+  });
+  const csv = "\uFEFF" + lines.map(l => l.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(";")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const el = document.createElement("a");
+  el.href = URL.createObjectURL(blob);
+  el.download = "material_" + (a.title || "recept").replace(/\s+/g, "_").slice(0, 40) + ".csv";
+  el.click();
+  URL.revokeObjectURL(el.href);
+}
+
+/* ================= Init ================= */
+document.getElementById("title").addEventListener("input", function () {
+  const a = active();
+  a.title = this.value;
+  renderRecipeSelect();
+  save();
+});
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+    e.preventDefault();
+    saveNow();
+  }
+});
+load();
+renderAll();
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Editory
+.vscode/
+.idea/
+
+# Node (ak by v budúcnosti pribudol)
+node_modules/
+
+# Lokálne poznámky a exporty
+*.local.*
+exporty/
