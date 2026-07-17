@@ -239,7 +239,7 @@
 
   <footer>
     <button class="btn btn-primary" onclick="addRow()">+ Pridať materiál</button>
-    <span class="save-note" id="save-note">Zmeny sa ukladajú automaticky v tomto prehliadači</span>
+    <span class="save-note" id="save-note">Zmeny sa ukladajú automaticky a zdieľajú medzi zariadeniami</span>
   </footer>
 </div>
 
@@ -271,7 +271,50 @@ const INITIAL_ROWS = [
 const KEY = "bamipa-recepty-v1";
 const LEGACY_KEY = "spotrebovany-material-v1";
 
+/* Zdieľané úložisko (Supabase) — publishable key je bezpečný pre prehliadač,
+   prístup je obmedzený cez Row Level Security v Supabase projekte. */
+const SUPABASE_URL = "https://irnfbtlxvcwaeuuymvwk.supabase.co";
+const SUPABASE_KEY = "sb_publishable_jNAQddMBan_EXwUyJZ9F_w_8SeycVvl";
+
 let store = { recipes: [], activeId: null };
+let dirty = false;
+let isOnline = true;
+
+function sbHeaders(extra) {
+  return Object.assign({
+    "apikey": SUPABASE_KEY,
+    "Authorization": "Bearer " + SUPABASE_KEY,
+    "Content-Type": "application/json"
+  }, extra || {});
+}
+async function sbFetchRecipes() {
+  const res = await fetch(SUPABASE_URL + "/rest/v1/recipes?select=id,title,rows,updated_at&order=updated_at.asc", {
+    headers: sbHeaders()
+  });
+  if (!res.ok) throw new Error("fetch failed " + res.status);
+  return res.json();
+}
+async function sbUpsertRecipe(r) {
+  const res = await fetch(SUPABASE_URL + "/rest/v1/recipes?on_conflict=id", {
+    method: "POST",
+    headers: sbHeaders({ "Prefer": "resolution=merge-duplicates,return=minimal" }),
+    body: JSON.stringify([{ id: r.id, title: r.title, rows: r.rows, updated_at: r.updatedAt }])
+  });
+  if (!res.ok) throw new Error("upsert failed " + res.status);
+}
+async function sbDeleteRecipe(id) {
+  const res = await fetch(SUPABASE_URL + "/rest/v1/recipes?id=eq." + encodeURIComponent(id), {
+    method: "DELETE",
+    headers: sbHeaders()
+  });
+  if (!res.ok) throw new Error("delete failed " + res.status);
+}
+function setOnline(ok) {
+  isOnline = ok;
+  const note = document.getElementById("save-note");
+  if (!note) return;
+  note.style.color = ok ? "" : "#c0392b";
+}
 
 const uid = () => "r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const active = () => store.recipes.find(r => r.id === store.activeId) || store.recipes[0];
@@ -288,10 +331,12 @@ function fmt(n, dec = 2) {
 /* ================= Ukladanie ================= */
 let saveTimer;
 function markDirty() {
+  dirty = true;
   const b = document.querySelector(".btn-save");
   if (b) { b.classList.add("dirty"); b.classList.remove("saved-flash"); b.textContent = "💾 Uložiť *"; }
 }
 function markSaved(flash) {
+  dirty = false;
   const b = document.querySelector(".btn-save");
   if (!b) return;
   b.classList.remove("dirty");
@@ -304,14 +349,25 @@ function markSaved(flash) {
   }
 }
 function doSave() {
+  const a = active();
   try {
-    const a = active();
     if (a) a.updatedAt = new Date().toISOString();
     localStorage.setItem(KEY, JSON.stringify(store));
     document.getElementById("save-note").textContent =
       "Uložené automaticky " + new Date().toLocaleTimeString("sk-SK");
-    return true;
   } catch (e) { return false; }
+  if (a) {
+    sbUpsertRecipe(a).then(() => {
+      setOnline(true);
+      document.getElementById("save-note").textContent =
+        "Zosynchronizované " + new Date().toLocaleTimeString("sk-SK");
+    }).catch(() => {
+      setOnline(false);
+      document.getElementById("save-note").textContent =
+        "⚠ Offline — uložené len lokálne, nezosynchronizované";
+    });
+  }
+  return true;
 }
 function save() {
   markDirty();
@@ -333,7 +389,18 @@ function makeRecipe(title, rows) {
   return { id: uid(), title, rows: rows.map(r => [...r]), updatedAt: new Date().toISOString() };
 }
 
-function load() {
+function mapRemoteRecipe(r) {
+  return {
+    id: r.id,
+    title: r.title || "",
+    rows: Array.isArray(r.rows) && r.rows.length
+      ? r.rows.map(x => [String(x[0] ?? ""), String(x[1] ?? ""), String(x[2] ?? "")])
+      : [["", "", ""]],
+    updatedAt: r.updated_at
+  };
+}
+
+function loadLocalCache() {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
@@ -341,7 +408,7 @@ function load() {
       if (Array.isArray(data.recipes) && data.recipes.length) {
         store = data;
         if (!active()) store.activeId = store.recipes[0].id;
-        return;
+        return true;
       }
     }
   } catch (e) {}
@@ -353,12 +420,54 @@ function load() {
       if (Array.isArray(d.rows) && d.rows.length) {
         const r = makeRecipe(d.title || "Recept na zmes — 3307 / 0300044451", d.rows);
         store = { recipes: [r], activeId: r.id };
-        return;
+        return true;
       }
     }
   } catch (e) {}
+  return false;
+}
+
+async function load() {
+  try {
+    const remote = await sbFetchRecipes();
+    setOnline(true);
+    if (Array.isArray(remote) && remote.length) {
+      const savedActiveId = store.activeId;
+      store.recipes = remote.map(mapRemoteRecipe);
+      store.activeId = store.recipes.some(r => r.id === savedActiveId) ? savedActiveId : store.recipes[0].id;
+      localStorage.setItem(KEY, JSON.stringify(store));
+      return;
+    }
+    if (Array.isArray(remote)) {
+      /* prázdna zdieľaná databáza — nasadíme východiskový recept */
+      const r = makeRecipe("Recept na zmes — 3307 / 0300044451", INITIAL_ROWS);
+      store = { recipes: [r], activeId: r.id };
+      localStorage.setItem(KEY, JSON.stringify(store));
+      sbUpsertRecipe(r).catch(() => {});
+      return;
+    }
+  } catch (e) {
+    setOnline(false);
+  }
+  if (loadLocalCache()) return;
   const r = makeRecipe("Recept na zmes — 3307 / 0300044451", INITIAL_ROWS);
   store = { recipes: [r], activeId: r.id };
+}
+
+function schedulePoll() {
+  setInterval(async () => {
+    if (dirty) return;
+    try {
+      const remote = await sbFetchRecipes();
+      setOnline(true);
+      if (!Array.isArray(remote) || !remote.length) return;
+      const currentId = store.activeId;
+      store.recipes = remote.map(mapRemoteRecipe);
+      store.activeId = store.recipes.some(r => r.id === currentId) ? currentId : store.recipes[0].id;
+      localStorage.setItem(KEY, JSON.stringify(store));
+      renderAll();
+    } catch (e) { setOnline(false); }
+  }, 20000);
 }
 
 function renderRecipeSelect() {
@@ -409,10 +518,12 @@ function deleteRecipe() {
     return;
   }
   if (!confirm('Vymazať recept „' + (a.title || "bez názvu") + '" vrátane všetkých údajov?')) return;
-  store.recipes = store.recipes.filter(r => r.id !== a.id);
+  const idToDelete = a.id;
+  store.recipes = store.recipes.filter(r => r.id !== idToDelete);
   store.activeId = store.recipes[0].id;
   renderAll();
   doSave();
+  sbDeleteRecipe(idToDelete).catch(() => {});
 }
 
 /* ================= Tabuľka ================= */
@@ -596,8 +707,11 @@ document.addEventListener("keydown", (e) => {
     saveNow();
   }
 });
-load();
-renderAll();
+(async function init() {
+  await load();
+  renderAll();
+  schedulePoll();
+})();
 </script>
 </body>
 </html>
